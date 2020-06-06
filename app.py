@@ -216,9 +216,91 @@ def prepare_image(image, target):
     image = np.expand_dims(image,0)
     # return the processed image
     return image
-
 @app.route("/predict", methods=["POST"])
 def predict():
+    json_file=open('yolo-tiny.json','r')     
+    # carga el json y crea el modelo
+    loaded_model_json = json_file.read()
+    json_file.close()
+    model = model_from_json(loaded_model_json)
+    # se cargan los pesos (weights) en el nuevo modelo
+    model.load_weights("yolo-tiny.h5")
+    print("Modelo cargado desde el PC")
+    # initialize the data dictionary that will be returned from the
+
+	# view
+    data = {"success": False}
+    net_h, net_w = 416, 416
+    obj_thresh, nms_thresh = 0.5, 0.45
+    anchors = [[116,90,  156,198,  373,326],  [30,61, 62,45,  59,119], [10,13,  16,30,  33,23]]
+    labels = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", \
+                "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", \
+                "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", \
+                "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", \
+                "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", \
+                "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", \
+                "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", \
+                "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", \
+                "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", \
+                "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
+	# ensure an image was properly uploaded to our endpoint
+    if flask.request.method == "POST":
+        if flask.request.files.get("image"):
+            # read the image in PIL format
+            image = flask.request.files["image"].read()
+            image = Image.open(io.BytesIO(image))
+           
+            image_h=image.size[0]
+            image_w=image.size[1]
+            print(image_h,image_w)
+            image = image.resize((net_w , net_w ))
+			# preprocess the image and prepare it for classification
+            #image = prepare_image(image, target=(416, 416))
+            image = img_to_array(image)
+            # scale pixel values to [0, 1]
+            image = image.astype('float32')
+            image /= 255.0
+            # add a dimension so that we have one sample
+            image = expand_dims(image, 0)
+			# classify the input image and then initialize the list
+			# of predictions to return to the client
+            yolos = model.predict(image)
+
+            # summarize the shape of the list of arrays
+            print([a.shape for a in yolos])
+
+            # define the anchors
+            anchors = [[116,90, 156,198, 373,326], [30,61, 62,45, 59,119], [10,13, 16,30, 33,23]]
+            # define the probability threshold for detected objects
+            class_threshold = 0.6
+            boxes = list()
+
+            for i in range(len(yolos)):
+                    # decode the output of the network
+                boxes += decode_netout(yolos[i][0], anchors[i], obj_thresh,  net_h, net_w)
+            
+            # correct the sizes of the bounding boxes
+            correct_yolo_boxes(boxes, image_h, image_w, net_h, net_w)
+
+            # suppress non-maximal boxes
+            do_nms(boxes, nms_thresh)
+
+            # get the details of the detected objects
+            v_boxes, v_labels, v_scores = get_boxes(boxes, labels, class_threshold)
+
+
+            data ["success"]=True
+            data["predictions"] = []
+            for i in range(len(v_labels)):
+                box = v_boxes[i]
+                r={"label":v_labels[i],"probability":float(v_scores[i]),"x_min":box.xmin,"y_min":box.ymin,"x_max":box.xmax,"y_max":box.ymax}
+                data["predictions"].append(r)
+                
+    # return the data dictionary as a JSON response
+    return flask.jsonify(data)
+
+@app.route("/predictg", methods=["POST"])
+def predictg():
 	# initialize the data dictionary that will be returned from the
 	# view
     data = {"success": False}
@@ -357,5 +439,5 @@ def index():
 if __name__ == "__main__":
 	print(("* Loading Keras model and Flask starting server..."
 		"please wait until server has fully started"))
-	load_model()
+	#load_model()
 	app.run(debug=True)
