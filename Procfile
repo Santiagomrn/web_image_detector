@@ -1,0 +1,1 @@
+web: gunicorn yolo_sever:app
