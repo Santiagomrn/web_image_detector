@@ -21,12 +21,13 @@ import io
 from keras.models import model_from_json
 from numpy import expand_dims
 
-# get all of the results above a threshold
-# takes the list of boxes, known labels, 
-#and our classification threshold as arguments and returns parallel lists of boxes, labels, and scores.
+import os
+from keras.models import load_model
+from keras.layers import Input
+from yolo_keras.utils import *
+from yolo_keras.model import *
 
-app = flask.Flask(__name__)
-model = None
+
 def get_boxes(boxes, labels, thresh):
     v_boxes, v_labels, v_scores = list(), list(), list()
     # enumerate all boxes
@@ -61,7 +62,7 @@ class BoundBox:
         self.ymin = ymin
         self.xmax = xmax
         self.ymax = ymax
-        
+
         self.objness = objness
         self.classes = classes
 
@@ -187,22 +188,6 @@ def correct_yolo_boxes(boxes, image_h, image_w, net_h, net_w):
         boxes[i].xmax = int((boxes[i].xmax - x_offset) / x_scale * image_w)
         boxes[i].ymin = int((boxes[i].ymin - y_offset) / y_scale * image_h)
         boxes[i].ymax = int((boxes[i].ymax - y_offset) / y_scale * image_h)
-# initialize our Flask application and the Keras model
-def load_model():
-    # load the pre-trained Keras model (here we are using a model
-    # pre-trained on ImageNet and provided by Keras, but you can
-    # substitute in your own networks just as easily)
-    global model
-    json_file=open('yolo-tiny.json','r')     
-    # carga el json y crea el modelo
-    loaded_model_json = json_file.read()
-    json_file.close()
-    model = model_from_json(loaded_model_json)
-    # se cargan los pesos (weights) en el nuevo modelo
-    model.load_weights("yolo-tiny.h5")
-    print("Modelo cargado desde el PC")
-    global graph
-    graph = tf.get_default_graph()
 
 def prepare_image(image, target):
     # if the image mode is not RGB, convert it
@@ -212,11 +197,14 @@ def prepare_image(image, target):
     # resize the input image and preprocess it
     image = image.resize(target)
     image = img_to_array(image)
-    # scale pixel values to [0, 1]
-    image = image.astype('float32')
-    image = np.expand_dims(image,0)
+    image = np.expand_dims(image, axis=0)
+    image = imagenet_utils.preprocess_input(image)
+
     # return the processed image
     return image
+app = flask.Flask(__name__)
+# initialize our Flask application and the Keras model
+# Get the COCO classes on which the model was trained
 @app.route("/predict", methods=["POST"])
 def predict():
     
@@ -304,210 +292,148 @@ def predict():
 
 @app.route("/chagas", methods=["POST"])
 def chagas():
-    json_file=open('chagas.json','r')     
-    # carga el json y crea el modelo
-    loaded_model_json = json_file.read()
-    json_file.close()
-    model = model_from_json(loaded_model_json)
-    # se cargan los pesos (weights) en el nuevo modelo
-    model.load_weights("chagas.h5")
-    print("Modelo cargado desde el PC")
-    # initialize the data dictionary that will be returned from the
-
-	# view
-    data = {"success": False}
-    net_h, net_w = 416, 416
-    obj_thresh, nms_thresh = 0.18, 0.18
-    anchors = [[19,29,  24,32,  20,37],[19,20,  17,25,  22,26]]
-    labels = ["Chagas"]
 	# ensure an image was properly uploaded to our endpoint
     if flask.request.method == "POST":
         if flask.request.files.get("image"):
-            # read the image in PIL format
-            image = flask.request.files["image"].read()
-            image = Image.open(io.BytesIO(image))
-           
-            image_h=image.size[0]
-            image_w=image.size[1]
-            print(image_h,image_w)
-            image = image.resize((net_w , net_w ))
-			# preprocess the image and prepare it for classification
-            #image = prepare_image(image, target=(416, 416))
-            image = img_to_array(image)
-            # scale pixel values to [0, 1]
-            image = image.astype('float32')
-            image /= 255.0
-            # add a dimension so that we have one sample
-            image = expand_dims(image, 0)
-			# classify the input image and then initialize the list
-			# of predictions to return to the client
-            yolos = model.predict(image)
+            classes_path = "yolo_keras/chagas_classes.txt"
+            with open(classes_path) as f:
+                class_names = f.readlines()
+                class_names = [c.strip() for c in class_names] 
+            num_classes = len(class_names)
 
-            # summarize the shape of the list of arrays
-            print([a.shape for a in yolos])
+            # Get the anchor box coordinates for the model
+            anchors_path = "yolo_keras/chagas_anchors.txt"
+            with open(anchors_path) as f:
+                anchors = f.readline()
+                anchors = [float(x) for x in anchors.split(',')]
+                anchors = np.array(anchors).reshape(-1, 2)
+            num_anchors = len(anchors)
 
-            # define the anchors
-            anchors = [[19,29,  24,32,  20,37],[19,20,  17,25,  22,26]]
-            # define the probability threshold for detected objects
-            class_threshold = 0.6
-            boxes = list()
+            # Set the expected image size for the model
+            model_image_size = (608, 608)
 
-            for i in range(len(yolos)):
-                    # decode the output of the network
-                boxes += decode_netout(yolos[i][0], anchors[i], obj_thresh,  net_h, net_w)
+            # Create YOLO model
+            model_path ="yolo_keras/custom_tiny.h5"
+            yolo_model = load_model(model_path, compile=False)
             
-            # correct the sizes of the bounding boxes
-            correct_yolo_boxes(boxes, image_h, image_w, net_h, net_w)
 
-            # suppress non-maximal boxes
-            do_nms(boxes, nms_thresh)
+            # Generate output tensor targets for bounding box predictions
+            # Predictions for individual objects are based on a detection probability threshold of 0.3
+            # and an IoU threshold for non-max suppression of 0.45
+            input_image_shape = K.placeholder(shape=(2, ))
+            boxes, scores, classes = yolo_eval(yolo_model.output, anchors, len(class_names), input_image_shape,
+                                                score_threshold=0.19, iou_threshold=0.10)
 
-            # get the details of the detected objects
-            v_boxes, v_labels, v_scores = get_boxes(boxes, labels, class_threshold)
+            print("YOLO model ready!")
 
 
-            data ["success"]=True
+            # read the image in PIL format
+            image = flask.request.files["image"].read()
+            image = Image.open(io.BytesIO(image))
+            
+            # Resize image for model input
+            image_data = letterbox_image(image, tuple(reversed(model_image_size)))
+
+            # Detect objects in the image
+                # normalize and reshape image data
+            image_data = np.array(image_data, dtype='float32')
+            image_data /= 255.
+            image_data = np.expand_dims(image_data, 0)  # Add batch dimension.
+
+            # Predict classes and locations using Tensorflow session
+            sess = K.get_session()
+            out_boxes, out_scores, out_classes = sess.run(
+                        [boxes, scores, classes],
+                        feed_dict={
+                            yolo_model.input: image_data,
+                            input_image_shape: [image.size[1], image.size[0]],
+                            K.learning_phase(): 0
+                        })
+
+            # bounding boxes
+             # Plot the image
+            img = np.array(image_data)
+
+            # Set up padding for boxes
+            img_size = model_image_size[0]
+            pad_x = max(img.shape[0] - img.shape[1], 0) * (img_size / max(img.shape))
+            pad_y = max(img.shape[1] - img.shape[0], 0) * (img_size / max(img.shape))
+            unpad_h = img_size - pad_y
+            unpad_w = img_size - pad_x
+
+            predicted_classes=[]
+            boxes=[]
+            scores=[]
+            # process each instance of each class that was found
+            for i, c in reversed(list(enumerate(out_classes))):
+
+                # Get the class name
+                predicted_class = class_names[c]
+                predicted_classes.append(predicted_class)
+                # Get the box coordinate and probability score for this instance
+                box = out_boxes[i]
+                score = out_scores[i]
+                scores.append(score)
+                # Format the label to be added to the image for this instance
+                label = '{} {:.2f}'.format(predicted_class, score)
+
+                # Get the box coordinates
+                top, left, bottom, right = box
+                y1 = max(0, np.floor(top + 0.5).astype('int32'))
+                x1 = max(0, np.floor(left + 0.5).astype('int32'))
+                y2 = min(image.size[1], np.floor(bottom + 0.5).astype('int32'))
+                x2 = min(image.size[0], np.floor(right + 0.5).astype('int32'))
+
+                # Set the box dimensions
+                box_h = ((y2 - y1) / unpad_h) * img.shape[0]
+                box_w = ((x2 - x1) / unpad_w) * img.shape[1]
+                y1 = ((y1 - pad_y // 2) / unpad_h) * img.shape[0]
+                x1 = ((x1 - pad_x // 2) / unpad_w) * img.shape[1]
+                boxes.append([int(x1),int(y1),int(box_w),int(box_h)])
+            
+            data={}
             data["predictions"] = []
-            for i in range(len(v_labels)):
-                box = v_boxes[i]
-                r={"label":v_labels[i],"probability":float(v_scores[i]),"x_min":box.xmin,"y_min":box.ymin,"x_max":box.xmax,"y_max":box.ymax}
+            for i in range(len(out_classes)):
+                box = boxes[i]
+                r={"label":predicted_classes[i],"probability":float(scores[i]),"box":{"x":box[0],"y":box[1],"w":box[2],"h":box[3]}}
                 data["predictions"].append(r)
-                
+
     # return the data dictionary as a JSON response
     return flask.jsonify(data)
 
-@app.route("/predictg", methods=["POST"])
-def predictg():
-	# initialize the data dictionary that will be returned from the
-	# view
+@app.route("/ResNet50",methods=["POST"])
+def routeResNet50():
+    model = ResNet50(weights="imagenet")
     data = {"success": False}
-    net_h, net_w = 416, 416
-    obj_thresh, nms_thresh = 0.5, 0.45
-    anchors = [[116,90,  156,198,  373,326],  [30,61, 62,45,  59,119], [10,13,  16,30,  33,23]]
-    labels = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", \
-                "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", \
-                "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", \
-                "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", \
-                "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", \
-                "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", \
-                "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", \
-                "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", \
-                "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", \
-                "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
-	# ensure an image was properly uploaded to our endpoint
+    # ensure an image was properly uploaded to our endpoint
     if flask.request.method == "POST":
         if flask.request.files.get("image"):
             # read the image in PIL format
             image = flask.request.files["image"].read()
             image = Image.open(io.BytesIO(image))
-           
-            image_h=image.size[0]
-            image_w=image.size[1]
-            print(image_h,image_w)
-            image = image.resize((net_w , net_w ))
-			# preprocess the image and prepare it for classification
-            #image = prepare_image(image, target=(416, 416))
-            image = img_to_array(image)
-            # scale pixel values to [0, 1]
-            image = image.astype('float32')
-            image /= 255.0
-            # add a dimension so that we have one sample
-            image = expand_dims(image, 0)
-			# classify the input image and then initialize the list
-			# of predictions to return to the client
-            with graph.as_default():
-                # make prediction
 
-                yolos = model.predict(image)
+            # preprocess the image and prepare it for classification
+            image = prepare_image(image, target=(224, 224))
 
-                # summarize the shape of the list of arrays
-                print([a.shape for a in yolos])
+            # classify the input image and then initialize the list
+            # of predictions to return to the client
+            preds = model.predict(image)
+            results = imagenet_utils.decode_predictions(preds)
+            data["predictions"] = []
 
-                # define the anchors
-                anchors = [[116,90, 156,198, 373,326], [30,61, 62,45, 59,119], [10,13, 16,30, 33,23]]
-                # define the probability threshold for detected objects
-                class_threshold = 0.6
-                boxes = list()
+            # loop over the results and add them to the list of
+            # returned predictions
+            for (imagenetID, label, prob) in results[0]:
+                r = {"label": label, "probability": float(prob)}
+                data["predictions"].append(r)
 
-                for i in range(len(yolos)):
-                        # decode the output of the network
-                    boxes += decode_netout(yolos[i][0], anchors[i], obj_thresh,  net_h, net_w)
-                
-                # correct the sizes of the bounding boxes
-                correct_yolo_boxes(boxes, image_h, image_w, net_h, net_w)
+            # indicate that the request was a success
+            data["success"] = True
 
-                # suppress non-maximal boxes
-                do_nms(boxes, nms_thresh)
-
-                # get the details of the detected objects
-                v_boxes, v_labels, v_scores = get_boxes(boxes, labels, class_threshold)
-
-
-                data ["success"]=True
-                data["predictions"] = []
-                for i in range(len(v_labels)):
-                    box = v_boxes[i]
-                    r={"label":v_labels[i],"probability":float(v_scores[i]),"x_min":box.xmin,"y_min":box.ymin,"x_max":box.xmax,"y_max":box.ymax}
-                    data["predictions"].append(r)
-                
     # return the data dictionary as a JSON response
     return flask.jsonify(data)
 
-
-@app.route("/yolov3", methods=["POST"])
-def yolov3():
-	# initialize the data dictionary that will be returned from the
-	# view
-    data = {"success": False}
-    net_h, net_w = 416, 416
-    obj_thresh, nms_thresh = 0.5, 0.45
-    anchors = [[116,90,  156,198,  373,326],  [30,61, 62,45,  59,119], [10,13,  16,30,  33,23]]
-    labels = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", \
-                "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", \
-                "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", \
-                "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", \
-                "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", \
-                "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", \
-                "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", \
-                "chair", "sofa", "pottedplant", "bed", "diningtable", "toilet", "tvmonitor", "laptop", "mouse", \
-                "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", \
-                "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
-   
-   
-    photo_filename = 'office.jpg'
-    # load and prepare image
-    image, image_w, image_h = load_image_pixels(photo_filename, (net_w, net_w))
-
-			# classify the input image and then initialize the list
-			# of predictions to return to the client
-    with graph.as_default():
-        # make prediction
-
-        yolos = model.predict(image)
-
-        # summarize the shape of the list of arrays
-        print([a.shape for a in yolos])
-
-        # define the anchors
-        anchors = [[116,90, 156,198, 373,326], [30,61, 62,45, 59,119], [10,13, 16,30, 33,23]]
-        # define the probability threshold for detected objects
-        class_threshold = 0.6
-        boxes = list()
-
-        for i in range(len(yolos)):
-                # decode the output of the network
-            boxes += decode_netout(yolos[i][0], anchors[i], obj_thresh,  net_h, net_w)
-        # suppress non-maximal boxes
-        do_nms(boxes, nms_thresh)
-
-        # get the details of the detected objects
-        v_boxes, v_labels, v_scores = get_boxes(boxes, labels, class_threshold)
-
-
-
-    # return the data dictionary as a JSON response
-    return flask.jsonify(v_labels)
-@app.route("/",methods=["GET"])
+@app.route("/index",methods=["GET"])
 def index():
     return render_template("index.html")
 

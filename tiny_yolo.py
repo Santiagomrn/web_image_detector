@@ -99,12 +99,10 @@ def get_boxes(image, out_boxes,out_classes,out_scores):
         box_w = ((x2 - x1) / unpad_w) * img.shape[1]
         y1 = ((y1 - pad_y // 2) / unpad_h) * img.shape[0]
         x1 = ((x1 - pad_x // 2) / unpad_w) * img.shape[1]
-        boxes.append([int(x1),int(y1),int(box_w),int(box_h)])
+        boxes.append([int(x1),int(y1),int(box_h),int(box_h)])
 
     return boxes, predicted_classes,scores
         
-
-
     
 print("Functions ready")
 
@@ -125,11 +123,13 @@ out_boxes, out_scores, out_classes = detect_objects(image_data)
 print('Found {} objects in {}'.format(len(out_boxes), img_path))
 
 # Display the image with bounding boxes
+
 boxes,predicted_classes,scores=get_boxes(image, out_boxes, out_classes,out_scores)
 data={}
 data["predictions"] = []
-# for i in range(len(out_classes)):
-#     box = out_boxes[i]
-#     r={"label":predicted_classes[i],"probability":float(out_scores[i]),"x":box[0],"y":box[1],"w":box[2],"h":box[3]}
-#     data["predictions"].append(r)
-print(boxes,predicted_classes,scores)
+for i in range(len(out_classes)):
+     box = boxes[i]
+     r={"label":predicted_classes[i],"probability":float(scores[i]),"x":box[0],"y":box[1],"w":box[2],"h":box[3]}
+     data["predictions"].append(r)
+#print(boxes,predicted_classes,scores)
+print(data)
