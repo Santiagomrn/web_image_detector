@@ -1,47 +1,70 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-<style>
 
-</style>
-    <title>Detector</title>
-</head>
-<body>
-  
-  <div class="containr mt-5">
-    <div class="mx-auto" style="width: 500px;">
-      <h3>Object Detector</h3>
-      <select onchange="selectDetector()" id="Detector" class="form-control">
-          <option value="O">Object Detector</option>
-          <option value="C">Chagas Detector</option>
-      </select>
-      <form id="form1" method="post" enctype="multipart/form-data" action="predict">
-        <div class="form-group ">
+<html>
+    <head>
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+        <title>Example</title>
+        <style>
+          .mt-10 {
+            margin-top: 10rem;
+          }
+        </style>
+    </head>
+    <body background="{{url_for('static', filename='Fondo.jpg')}}">
+        <header>
+         <nav class="navbar navbar-dark bg-primary">
+            <!-- <img src="{{url_for('static', filename='logo_uady.jpg')}}" alt="logo" width="75" height="125"/> -->
+            <a class="navbar-brand"  href="/index">Home</a>
+          </nav>
+        </header>
+        <main align="center">
+          
+            <article >
+                <h1  class="text-white" >Object Detectors</h1>     
+                <section class="mt-10" >
+                  <div class="container" align="center">
+                    <div class="row">
+                      <div class="col-sm">
+                        <div class="card bg-light mb-3" style="height: 12rem;width: 18rem;">
+                          <!-- <img src="..." class="card-img-top" alt="..."> -->
+                          <div class="card-body">
+                            <h5 class="card-title">ResNet50</h5>
+                            <p class="card-text"></p>
+                            <a href="/nets/ResNet50" class="btn btn-primary mt-5">Try</a>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-sm">
+                        <div class="card bg-light mb-3" style="height: 12rem;width: 18rem;">
+                          <!-- <img src="..." class="card-img-top" alt="..."> -->
+                          <div class="card-body">
+                            <h5 class="card-title">Yolo-tiny</h5>
+                            <p class="card-text"></p>
+                            <a cals href="/nets/Yolo-tiny" class="btn btn-primary mt-5 ">Try</a>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-sm">
+                        <div class="card bg-light mb-3" style="height: 12rem;width: 18rem;">
+                          <!-- <img src="..." class="card-img-top" alt="..."> -->
+                          <div class="card-body">
+                            <h5 class="card-title">Yolo-tiny Chagas</h5>
+                            <p class="card-text"></p>
+                            <a href="/nets/Chagas" class="btn btn-primary mt-5">Try</a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+            </article>
+        </main>
+        <footer align="center" class="text-white" >
+             Last release 10 junio del 2020
+        </footer>
+    </body>
+</html>
 
-          <div class="mt-2"></div>
-          <div class="input-group mb-3">
-            <div class="input-group-prepend">
-              <span class="input-group-text" id="inputGroupFileAddon01">Upload</span>
-            </div>
-            <div class="custom-file ">
-              <input onchange="inputName()" type="file" class="custom-file-input" type="file"  name="image" accept=".jpg" id="File01" aria-describedby="01">
-              <label id="labelFile01" class="custom-file-label" for="inputGroupFile01">Choose images to upload (JPG)</label>
-            </div>
-          </div>
-        </div>
-        <div>
-            <button type="submit" class="btn btn-primary">Send</button>
-        </div>
-      
-      </form>
-    </div>
-  </div>
-
-</body>
 <script>
 function inputName() {
   var File = document.getElementById("File01");

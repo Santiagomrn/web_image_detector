@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+<style>
+
+</style>
+    <title>Detector</title>
+</head>
+<header>      
+  <nav class="navbar navbar-dark bg-primary">
+    <!-- <img src="{{url_for('static', filename='logo_uady.jpg')}}" alt="logo" width="75" height="125"/> -->
+    <a class="navbar-brand"  href="/index">Home</a>
+  </nav>
+</header>
+<body >
+  <figure>
+
+  </figure>
+  <div class="containr mt-5">
+    <div class="mx-auto" style="width: 500px;">
+      <h3>{{name}}</h3>
+      <!-- <select onchange="selectDetector()" id="Detector" class="form-control">
+          <option value="O">Object Detector</option>
+          <option value="C">Chagas Detector</option>
+      </select> -->
+      <form id="form1" method="post" enctype="multipart/form-data" onsubmit="return validacion()" action=../{{name}}>
+        <div class="form-group ">
+
+          <div class="mt-2"></div>
+          <div class="input-group mb-3">
+            <div class="input-group-prepend">
+              <span class="input-group-text" id="inputGroupFileAddon01">Upload</span>
+            </div>
+            <div class="custom-file ">
+              <input onchange="inputName()" type="file" class="custom-file-input" type="file"  name="image" accept=".jpg" id="File01" aria-describedby="01">
+              <label id="labelFile01" class="custom-file-label" for="inputGroupFile01">Choose images to upload (JPG)</label>
+            </div>
+          </div>
+        </div>
+        <div>
+            <button type="submit" class="btn btn-primary" >Send</button>
+        </div>
+        
+      </form>
+      <p id="cargando"></p>
+      {% if predictions %}
+      <h3>resultados</h3>
+      {% for prediction in predictions %}
+           <li>{{ prediction["label"]}}  {{prediction["probability"]}}</li>
+      {% endfor %}  
+        <code>{{data}}</code>
+      {% endif %}
+    </div>
+  </div>
+
+</body>
+<script>
+function inputName() {
+  var File = document.getElementById("File01");
+  var LabelFile=document.getElementById("labelFile01");
+  document.getElementById("labelFile01").innerHTML = File.value.substring(12,File.value.length);
+}
+function validacion(){
+  valor = document.getElementById("File01").value;
+
+if( valor == null || valor.length == 0  ) {
+  return false;
+}
+document.getElementById("cargando").innerHTML="Cargando Espere .....";
+}/*
+function selectDetector(){
+  var Detector = document.getElementById("Detector");
+  
+  if(Detector.value=="O"){
+    console.log(Detector.value);
+    var Path=document.getElementById("form1");
+    Path.action="predict";
+  }
+  if(Detector.value=="C"){
+    console.log(Detector.value);
+    var Path=document.getElementById("form1");
+    Path.action="chagas";
+  }
+}
+*/
+</script>
+</html>

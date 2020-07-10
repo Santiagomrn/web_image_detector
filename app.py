@@ -205,8 +205,8 @@ def prepare_image(image, target):
 app = flask.Flask(__name__)
 # initialize our Flask application and the Keras model
 # Get the COCO classes on which the model was trained
-@app.route("/predict", methods=["POST"])
-def predict():
+@app.route("/Yolo-tiny", methods=["POST"])
+def tiny():
     
     json_file=open('yolo-tiny.json','r')     
     # carga el json y crea el modelo
@@ -217,7 +217,6 @@ def predict():
     model.load_weights("yolo-tiny.h5")
     print("Modelo cargado desde el PC")
     # initialize the data dictionary that will be returned from the
-
 	# view
     data = {"success": False}
     net_h, net_w = 416, 416
@@ -288,9 +287,14 @@ def predict():
                 data["predictions"].append(r)
                 
     # return the data dictionary as a JSON response
-    return flask.jsonify(data)
+    
+    sess=K.get_session()
+    K.clear_session()
+    #return flask.jsonify(data)
+    return render_template("nets.html",name="Yolo-tiny",predictions=data["predictions"])
 
-@app.route("/chagas", methods=["POST"])
+
+@app.route("/Chagas", methods=["POST"])
 def chagas():
 	# ensure an image was properly uploaded to our endpoint
     if flask.request.method == "POST":
@@ -341,6 +345,7 @@ def chagas():
             image_data = np.expand_dims(image_data, 0)  # Add batch dimension.
 
             # Predict classes and locations using Tensorflow session
+            
             sess = K.get_session()
             out_boxes, out_scores, out_classes = sess.run(
                         [boxes, scores, classes],
@@ -399,11 +404,16 @@ def chagas():
                 data["predictions"].append(r)
 
     # return the data dictionary as a JSON response
-    return flask.jsonify(data)
+    sess.clear_session()
+    #return flask.jsonify(data)
+    return render_template("nets.html",name="Chagas",predictions=data["predictions"])
+
 
 @app.route("/ResNet50",methods=["POST"])
 def routeResNet50():
+   
     model = ResNet50(weights="imagenet")
+   
     data = {"success": False}
     # ensure an image was properly uploaded to our endpoint
     if flask.request.method == "POST":
@@ -414,7 +424,8 @@ def routeResNet50():
 
             # preprocess the image and prepare it for classification
             image = prepare_image(image, target=(224, 224))
-
+           
+            
             # classify the input image and then initialize the list
             # of predictions to return to the client
             preds = model.predict(image)
@@ -431,11 +442,20 @@ def routeResNet50():
             data["success"] = True
 
     # return the data dictionary as a JSON response
-    return flask.jsonify(data)
+
+    sess=K.get_session()
+    K.clear_session()
+    #return flask.jsonify(data)
+    return render_template("nets.html",name="ResNet50",predictions=data["predictions"])
+
+@app.route("/nets/<string:id_net>",methods=["GET"])
+def nets(id_net=None):
+    return render_template("nets.html",name=id_net)
 
 @app.route("/index",methods=["GET"])
 def index():
     return render_template("index.html")
+
 
 # if this is the main thread of execution first load the model and
 # then start the server
