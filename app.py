@@ -451,7 +451,9 @@ def routeResNet50():
 @app.route("/nets/<string:id_net>",methods=["GET"])
 def nets(id_net=None):
     return render_template("nets.html",name=id_net)
-
+@app.route("/",methods=["GET"])
+def main():
+    return render_template("index.html")
 @app.route("/index",methods=["GET"])
 def index():
     return render_template("index.html")
